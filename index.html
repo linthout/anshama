@@ -3,49 +3,59 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>תור להנשמה — משחק כיתתי (קובץ אחד)</title>
+  <title>תור להנשמה</title>
   <style>
-    :root{ --bg:#0b0f19; --panel:#12182b; --muted:#aab; --border:#2a3466; --acc:#3b5bfd; --good:#12c26d; --bad:#ef5350; }
+    /* ⚙️ ערכת צבעים בהירה */
+    :root{ --bg:#f7f8fc; --panel:#ffffff; --muted:#4b5563; --border:#e5e7eb; --acc:#1d4ed8; --good:#16a34a; --bad:#dc2626; --text:#0b0f19; }
     *{box-sizing:border-box}
-    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,"Rubik",sans-serif;background:var(--bg);color:#e7e7ea}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,"Rubik",sans-serif;background:var(--bg);color:var(--text)}
     .wrap{max-width:1024px;margin:0 auto;padding:16px}
     h1,h2,h3{margin:8px 0 12px}
     .card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:16px;margin:12px 0}
     .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
-    input,button,select,textarea{font:inherit;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:#0d1430;color:#e7e7ea}
+    input,button,select,textarea{font:inherit;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:#ffffff;color:var(--text)}
     button{cursor:pointer}
     .primary{background:var(--acc);border-color:var(--acc);color:#fff}
     button:disabled{opacity:.6;cursor:not-allowed}
-    .pill{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;background:#101837;border:1px solid var(--border);border-radius:999px}
+    .pill{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;background:#eef2ff;border:1px solid #dbeafe;border-radius:999px}
     .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
     .muted{color:var(--muted)}
     .grid{display:grid;gap:12px}
 
     /* קלפים לסידור תור */
     .queue{display:grid;gap:10px}
-    .card-patient{background:#0f1430;border:1px solid var(--border);border-radius:12px;padding:12px;display:flex;align-items:center;gap:12px}
-    .drag-handle{width:28px;height:28px;border-radius:8px;background:#1a2450;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-weight:700;user-select:none}
+    .card-patient{background:#ffffff;border:1px solid var(--border);border-radius:12px;padding:12px;display:flex;align-items:center;gap:12px;user-select:none}
+    .drag-handle{width:28px;height:28px;border-radius:8px;background:#eef2ff;border:1px solid #dbeafe;display:flex;align-items:center;justify-content:center;font-weight:700;user-select:none;cursor:grab}
     .card-patient .meta{flex:1}
-    .card-patient .rank{width:32px;text-align:center;color:#ccd}
+    .card-patient .rank{width:32px;text-align:center;color:#111827}
     .card-patient.dragging{opacity:.6;outline:2px dashed var(--acc)}
     .swap-hint{font-size:12px;color:var(--muted)}
     .ud-buttons{display:flex;gap:6px}
 
     /* טבלאות ניתוח במסך המנחה */
     .heat{width:100%; border-collapse:collapse; font-size:14px}
-    .heat th,.heat td{border-bottom:1px solid var(--border);padding:6px 8px;text-align:right}
-    .bar{height:16px; background:#1d2a66; border:1px solid var(--border); border-radius:999px; position:relative}
+    .heat th,.heat td{border-bottom:1px solid var(--border);padding:8px 10px;text-align:right}
+    .bar{height:16px; background:#e5edff; border:1px solid #dbeafe; border-radius:999px; position:relative}
     .bar > i{display:block; height:100%; background:var(--acc); border-radius:999px}
     .legend{display:flex;gap:8px;flex-wrap:wrap}
-    .legend .tag{font-size:12px;padding:2px 8px;background:#121e52;border:1px solid var(--border);border-radius:999px}
+    .legend .tag{font-size:12px;padding:4px 10px;background:#eef2ff;border:1px solid #dbeafe;border-radius:999px}
 
-    .qr{background:#0f1430;border:1px dashed var(--border);border-radius:12px;padding:10px}
+    .qr{background:#ffffff;border:1px dashed var(--border);border-radius:12px;padding:10px}
     .answers{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+
+    /* סטאטים גדולים בעמודת שינוי בין שלבים */
+    .stats-col{display:flex;flex-direction:column;gap:10px;margin-top:8px}
+    .stat{background:#ffffff;border:1px solid var(--border);border-radius:12px;padding:12px}
+    .stat h4{margin:0 0 4px 0;font-size:18px}
+    .stat p{margin:0;color:var(--muted)}
+
+    /* קונסנסוס בעמודה */
+    .consensus{display:flex;flex-direction:column;gap:8px;margin-top:6px}
   </style>
 </head>
 <body>
   <div class="wrap">
-    <h1>תור להנשמה — משחק כיתתי</h1>
+    <h1>תור להנשמה</h1>
     <div id="app" class="grid"></div>
   </div>
 
@@ -58,14 +68,20 @@
 */
 const firebaseConfig = {
   // TODO: להדביק כאן את המפתח (firebaseConfig)
-    apiKey: "AIzaSyC386dVbnZWk_3lrBVbAz9Si8OUJBV7BpU",
-    authDomain: "tor-leanshama.firebaseapp.com",
-    databaseURL: "https://tor-leanshama-default-rtdb.europe-west1.firebasedatabase.app",
-    projectId: "tor-leanshama",
-    storageBucket: "tor-leanshama.firebasestorage.app",
-    messagingSenderId: "436293475933",
-    appId: "1:436293475933:web:31f81a85eec1d81a0b37b4"
-
+  // apiKey: "...",
+  // authDomain: "...",
+  // databaseURL: "...",
+  // projectId: "...",
+  // storageBucket: "...",
+  // messagingSenderId: "...",
+  // appId: "..."
+  apiKey: "AIzaSyC386dVbnZWk_3lrBVbAz9Si8OUJBV7BpU",
+  authDomain: "tor-leanshama.firebaseapp.com",
+  databaseURL: "https://tor-leanshama-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "tor-leanshama",
+  storageBucket: "tor-leanshama.firebasestorage.app",
+  messagingSenderId: "436293475933",
+  appId: "1:436293475933:web:31f81a85eec1d81a0b37b4"
 };
 /* ========================================================== */
 
@@ -97,8 +113,7 @@ const SCENARIO = {
     { id:"B", label:"מטופל B", age:64, years:8,  job:"מורה בבית ספר יסודי" },
     { id:"C", label:"מטופל C", age:47, years:20, job:"מהנדס תשתיות" },
     { id:"D", label:"מטופל D", age:75, years:5,  job:"מנתח/ת" },
-    { id:"E", label:"מטופלת E", age:35, years:30, job:"הורה לשלושה, ללא תעסוקה" },
-    { id:"F", label:"מטופל F", age:59, years:10, job:"כבאי" }
+    { id:"E", label:"מטופלת E", age:35, years:30, job:"הורה לשלושה, ללא תעסוקה" }
   ]
 };
 
@@ -118,7 +133,8 @@ async function roomExists(code){
   return snap.exists();
 }
 function qrURL(url){
-  return `https://chart.googleapis.com/chart?cht=qr&chs=280x280&chl=${encodeURIComponent(url)}`;
+  // החלפה ל-qrserver.com
+  return `https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(url)}`;
 }
 function escapeHtml(s=""){return s.replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]))}
 function escapeAttr(s=""){return s.replace(/"/g,'&quot;')}
@@ -144,13 +160,18 @@ function hostUI(code){
 }
 
 function renderHost(code, data){
-  const base   = location.origin + location.pathname;
-  const joinURL = `${base}?code=${encodeURIComponent(code)}`; // ה-QR כולל קוד חדר
+  const base    = location.origin + location.pathname;
+  const joinURL = `${base}?code=${encodeURIComponent(code)}`; // QR כולל קוד חדר
   const totalPlayers = data.players? Object.keys(data.players).length : 0;
   const roundIndex   = data.roundIndex ?? -1;
   const round        = data.scenario?.rounds?.[roundIndex] || null;
   const patients     = data.scenario?.patients || [];
   const subs         = collectSubmissions(data.players, roundIndex);
+
+  // נתוני שימוש ב"סדר אקראי" בשלב זה
+  const randomizedNow = countRandomized(data.players, roundIndex);
+  const submitters = subs.length; // כמות הסדרים שהתקבלו
+  const randRate = submitters? Math.round(100*randomizedNow/submitters):0;
 
   appEl.innerHTML = `
     <div class=card>
@@ -162,7 +183,7 @@ function renderHost(code, data){
             <span class=pill>שלב: <strong>${roundIndex<0?"טרם התחיל":`${roundIndex+1}/3`}</strong></span>
             <span class=pill>קבלת תשובות: <strong>${data.lock?"סגור":"פתוח"}</strong></span>
           </div>
-          ${round?`<p class=muted style="max-width:560px;margin-top:8px;">${escapeHtml(round.desc)}</p>`:""}
+          ${round?`<p class=muted style="max-width:680px;margin-top:8px;">${escapeHtml(round.desc)}</p>`:""}
           <div class=row style="margin-top:8px;gap:8px;">
             <button class=primary onclick="startHost('${code}')" ${roundIndex!==-1?"disabled":''}>התחל שלב 1</button>
             <button onclick="prevStage('${code}')" ${roundIndex<=0?"disabled":''}>⟵ שלב קודם</button>
@@ -190,6 +211,10 @@ function renderHost(code, data){
     ${ roundIndex>=0 ? `
     <div class=card>
       <h2>תוצאות שלב ${roundIndex+1}</h2>
+      <div class=legend>
+        <span class=tag>הוגשו סדרים בשלב זה: <b>${submitters}</b></span>
+        <span class=tag>השתמשו ב"סדר אקראי" בשלב זה: <b>${randomizedNow}</b> (~${randRate}%)</span>
+      </div>
       ${renderConsensus(patients, subs)}
       ${renderHeatmap(patients, subs)}
       ${renderChangesBlock(data.players, roundIndex)}
@@ -219,7 +244,11 @@ function collectSubmissions(players, roundIndex){
     const o = players[pid]?.orders?.[roundIndex];
     if (Array.isArray(o) && o.length>0) orders.push(o);
   }
-  return orders; // מערכים של מזהי מטופלים בסדר 1..6
+  return orders; // מערכים של מזהי מטופלים בסדר 1..5
+}
+
+function countRandomized(players, roundIndex){
+  let c=0; for (const pid in players||{}){ if (players[pid]?.rand?.[roundIndex]) c++; } return c;
 }
 
 function renderConsensus(patients, orders){
@@ -229,8 +258,12 @@ function renderConsensus(patients, orders){
   for (const o of orders){ o.forEach((id, idx)=>{ if (posSum[id]!=null) posSum[id]+= (idx+1); }); }
   const avg = Object.fromEntries(ids.map(id=>[id, count? (posSum[id]/count) : 0]));
   const sorted = [...patients].sort((a,b)=> avg[a.id]-avg[b.id]);
-  const list = sorted.map((p,i)=>`<div class=pill><b>${i+1}.</b> ${escapeHtml(p.label)} <span class=muted>(עמדה ממוצעת ${avg[p.id]?avg[p.id].toFixed(2):"—"})</span></div>`).join(" ");
-  return `<h3>תור קונסנסואלי</h3><div class=row>${list || '<span class=muted>אין עדיין תשובות</span>'}</div>`
+  const list = sorted.map((p,i)=>`
+    <div class="pill" style="justify-content:space-between;">
+      <div><b>${i+1}.</b> ${escapeHtml(p.label)}</div>
+      <div class="muted">גיל: ${p.age} · עמדה ממוצעת: ${avg[p.id]?avg[p.id].toFixed(2):"—"}</div>
+    </div>`).join("");
+  return `<h3>תור קונסנסואלי</h3><div class="consensus">${list || '<span class=muted>אין עדיין תשובות</span>'}</div>`
 }
 
 function renderHeatmap(patients, orders){
@@ -238,13 +271,13 @@ function renderHeatmap(patients, orders){
   const counts = Object.fromEntries(patients.map(p=>[p.id, Array(n).fill(0)]));
   for (const o of orders){ o.forEach((id, idx)=>{ if (counts[id]) counts[id][idx]++; }); }
   const total = orders.length || 1;
-  let html = `<h3 style=\"margin-top:14px;\">התפלגות מיקומים</h3><table class=heat><thead><tr><th>מטופל/ת</th>${Array.from({length:n},(_,i)=>`<th>${i+1}</th>`).join('')}</tr></thead><tbody>`;
+  let html = `<h3 style="margin-top:14px;">התפלגות מיקומים</h3><table class=heat><thead><tr><th>מטופל/ת (גיל)</th>${Array.from({length:n},(_,i)=>`<th>${i+1}</th>`).join('')}</tr></thead><tbody>`;
   for (const p of patients){
-    html += `<tr><td><b>${escapeHtml(p.label)}</b></td>`;
+    html += `<tr><td><b>${escapeHtml(p.label)}</b> <span class=muted>(${p.age})</span></td>`;
     const arr = counts[p.id];
     for (let i=0;i<n;i++){
       const c = arr[i]||0; const w = Math.round(100*c/total);
-      html += `<td><div class=bar><i style=\"width:${w}%\"></i></div> <span class=muted>${c}</span></td>`
+      html += `<td><div class=bar><i style="width:${w}%"></i></div> <span class=muted>${c}</span></td>`
     }
     html += `</tr>`;
   }
@@ -255,27 +288,49 @@ function renderHeatmap(patients, orders){
 function renderChangesBlock(players, roundIndex){
   if (roundIndex<=0) return `<p class=muted style="margin-top:8px;">נתוני שינוי יוצגו החל משלב 2.</p>`;
   // Spearman footrule בין השלב הנוכחי לקודם לכל משתתף
-  let have=0, sum=0, buckets={"0":0,"1-2":0,"3+":0};
+  let have=0, sum=0, buckets={"0":0,"1-2":0,"3+":0}, randAmong=0;
   for (const pid in players||{}){
     const prev = players[pid]?.orders?.[roundIndex-1];
     const cur  = players[pid]?.orders?.[roundIndex];
     if (Array.isArray(prev) && Array.isArray(cur)){
       const dist = footrule(prev, cur);
       have++; sum += dist;
+      if (players[pid]?.rand?.[roundIndex]) randAmong++;
       if (dist===0) buckets["0"]++; else if (dist<=2) buckets["1-2"]++; else buckets["3+"]++;
     }
   }
   if (!have) return `<p class=muted style="margin-top:8px;">אין עדיין מספיק נתונים להשוואה.</p>`;
   const avg = (sum/have).toFixed(2);
+  const randPct = Math.round(100*randAmong/have);
   return `
     <div style="margin-top:14px">
       <h3>שינויים בין שלבים</h3>
-      <div class=legend>
-        <span class=tag>משתתפים עם נתונים: <b>${have}</b></span>
-        <span class=tag>מדד שינוי ממוצע (Spearman footrule): <b>${avg}</b></span>
-        <span class=tag>ללא שינוי: <b>${buckets["0"]}</b></span>
-        <span class=tag>1–2 החלפות: <b>${buckets["1-2"]}</b></span>
-        <span class=tag>3+ החלפות: <b>${buckets["3+"]}</b></span>
+      <div class="stats-col">
+        <div class=stat>
+          <h4>מדד שינוי ממוצע</h4>
+          <div style="font-size:22px;font-weight:700;">${avg}</div>
+          <p>Spearman footrule — סכום ההפרשים המוחלטים במיקום לכל מטופל/ת בין שני שלבים, ממוצע על פני המשתתפים.</p>
+        </div>
+        <div class=stat>
+          <h4>ללא שינוי</h4>
+          <div style="font-size:22px;font-weight:700;">${buckets["0"]}</div>
+          <p>מספר משתתפים שלא שינו כלל את הסדר בין שני השלבים.</p>
+        </div>
+        <div class=stat>
+          <h4>1–2 החלפות</h4>
+          <div style="font-size:22px;font-weight:700;">${buckets["1-2"]}</div>
+          <p>מספר משתתפים שביצעו שינוי קטן (עד שתי החלפות מקומות).</p>
+        </div>
+        <div class=stat>
+          <h4>3+ החלפות</h4>
+          <div style="font-size:22px;font-weight:700;">${buckets["3+"]}</div>
+          <p>מספר משתתפים שביצעו שינוי משמעותי (שלוש החלפות ומעלה).</p>
+        </div>
+        <div class=stat>
+          <h4>השתמשו ב"סדר אקראי"</h4>
+          <div style="font-size:22px;font-weight:700;">${randAmong} (${randPct}%)</div>
+          <p>מתוך מי שהגישו בשני השלבים — כמה בחרו להשתמש באקראי בשלב הנוכחי.</p>
+        </div>
       </div>
     </div>`;
 }
@@ -355,7 +410,7 @@ function buildQueueUI(sel, patients, order, roundIndex, lock){
     const p = byId[id];
     const row = document.createElement('div');
     row.className = 'card-patient';
-    row.draggable = !lock; // גרירה בשולחן עבודה
+    row.setAttribute('draggable', String(!lock)); // הבטחת תאימות
     row.dataset.id = id;
 
     row.innerHTML = `
@@ -381,8 +436,8 @@ function buildQueueUI(sel, patients, order, roundIndex, lock){
       else { const idA=tapFirst.dataset.id, idB=row.dataset.id; tapFirst.style.outline='none'; tapFirst=null; swap(idA,idB); }
     });
 
-    // Drag & drop
-    row.addEventListener('dragstart',()=>{ if(lock) return; row.classList.add('dragging'); });
+    // Drag & drop (שיפור תאימות: setData)
+    row.addEventListener('dragstart',(e)=>{ if(lock) return; e.dataTransfer && e.dataTransfer.setData('text/plain', id); row.classList.add('dragging'); });
     row.addEventListener('dragend',()=>{ row.classList.remove('dragging'); refreshRanks(); });
 
     el.appendChild(row);
@@ -482,14 +537,24 @@ window.leave = async (code)=>{
 };
 
 window.randomize = async (code)=>{
+  // ערבוב לוקלי + סימון בדטה שהמשתמש בחר אקראי בשלב הנוכחי
+  const rr = ref(db,`rooms/${code}`);
+  const d  = (await get(rr)).val(); if (!d) return;
+  const ri = d.roundIndex; if (ri<0) return;
+
   const key = codeKey();
-  const arr = (loadLocal(key) || []).slice();
-  for (let i=arr.length-1;i>0;i--){ const j = Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]]; }
-  localStorage.setItem(key, JSON.stringify(arr));
   const el = document.querySelector('#queue'); if (!el) return;
+  const arr = [...el.querySelectorAll('.card-patient')].map(n=>n.dataset.id);
+  for (let i=arr.length-1;i>0;i--){ const j = Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]]; }
+
   const map = Object.fromEntries([...el.children].map(n=>[n.dataset.id, n]));
   arr.forEach(id=>{ const node = map[id]; if (node) el.appendChild(node); });
   [...el.querySelectorAll('.card-patient .rank')].forEach((r,i)=> r.textContent = i+1);
+  localStorage.setItem(key, JSON.stringify(arr));
+
+  // סימון בדטה: המשתמש בחר "סדר אקראי" בשלב זה
+  const meRef = ref(db,`rooms/${code}/players/${playerId}/rand`);
+  const patch  = {}; patch[ri] = true; await update(meRef, patch);
 };
 
 window.submitOrder = async (code)=>{
