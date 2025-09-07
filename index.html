@@ -1,0 +1,543 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>תור להנשמה — משחק כיתתי (קובץ אחד)</title>
+  <style>
+    :root{ --bg:#0b0f19; --panel:#12182b; --muted:#aab; --border:#2a3466; --acc:#3b5bfd; --good:#12c26d; --bad:#ef5350; }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,"Rubik",sans-serif;background:var(--bg);color:#e7e7ea}
+    .wrap{max-width:1024px;margin:0 auto;padding:16px}
+    h1,h2,h3{margin:8px 0 12px}
+    .card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:16px;margin:12px 0}
+    .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+    input,button,select,textarea{font:inherit;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:#0d1430;color:#e7e7ea}
+    button{cursor:pointer}
+    .primary{background:var(--acc);border-color:var(--acc);color:#fff}
+    button:disabled{opacity:.6;cursor:not-allowed}
+    .pill{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;background:#101837;border:1px solid var(--border);border-radius:999px}
+    .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+    .muted{color:var(--muted)}
+    .grid{display:grid;gap:12px}
+
+    /* קלפים לסידור תור */
+    .queue{display:grid;gap:10px}
+    .card-patient{background:#0f1430;border:1px solid var(--border);border-radius:12px;padding:12px;display:flex;align-items:center;gap:12px}
+    .drag-handle{width:28px;height:28px;border-radius:8px;background:#1a2450;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-weight:700;user-select:none}
+    .card-patient .meta{flex:1}
+    .card-patient .rank{width:32px;text-align:center;color:#ccd}
+    .card-patient.dragging{opacity:.6;outline:2px dashed var(--acc)}
+    .swap-hint{font-size:12px;color:var(--muted)}
+    .ud-buttons{display:flex;gap:6px}
+
+    /* טבלאות ניתוח במסך המנחה */
+    .heat{width:100%; border-collapse:collapse; font-size:14px}
+    .heat th,.heat td{border-bottom:1px solid var(--border);padding:6px 8px;text-align:right}
+    .bar{height:16px; background:#1d2a66; border:1px solid var(--border); border-radius:999px; position:relative}
+    .bar > i{display:block; height:100%; background:var(--acc); border-radius:999px}
+    .legend{display:flex;gap:8px;flex-wrap:wrap}
+    .legend .tag{font-size:12px;padding:2px 8px;background:#121e52;border:1px solid var(--border);border-radius:999px}
+
+    .qr{background:#0f1430;border:1px dashed var(--border);border-radius:12px;padding:10px}
+    .answers{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>תור להנשמה — משחק כיתתי</h1>
+    <div id="app" class="grid"></div>
+  </div>
+
+<script type="module">
+/* ===================== הגדרת Firebase =====================
+   1) היכנס/י ל-Firebase Console וצר/י פרויקט חדש
+   2) Realtime Database → Create (מצב בדיקה)
+   3) Project settings → Your apps → Web → העתיק/י firebaseConfig
+   4) הדבק/י כאן את האובייקט ↓↓↓
+*/
+const firebaseConfig = {
+  // TODO: להדביק כאן את המפתח (firebaseConfig)
+    apiKey: "AIzaSyC386dVbnZWk_3lrBVbAz9Si8OUJBV7BpU",
+    authDomain: "tor-leanshama.firebaseapp.com",
+    databaseURL: "https://tor-leanshama-default-rtdb.europe-west1.firebasedatabase.app",
+    projectId: "tor-leanshama",
+    storageBucket: "tor-leanshama.firebasestorage.app",
+    messagingSenderId: "436293475933",
+    appId: "1:436293475933:web:31f81a85eec1d81a0b37b4"
+
+};
+/* ========================================================== */
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
+import { getDatabase, ref, child, set, get, onValue, update } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
+
+if (!firebaseConfig || !firebaseConfig.apiKey) {
+  document.querySelector('#app').innerHTML = `
+    <div class="card">
+      <h2>⚠️ חסר firebaseConfig</h2>
+      <p>פתח/י את הקובץ והדבק/י את האובייקט <code>firebaseConfig</code> לפי ההוראות למעלה.</p>
+    </div>`;
+  throw new Error("No Firebase config provided");
+}
+
+const app = initializeApp(firebaseConfig);
+const db  = getDatabase(app);
+
+/* ===================== תרחיש ושלבים ===================== */
+const SCENARIO = {
+  title: "תור להנשמה",
+  rounds: [
+    { key: 0, name: "שלב 1: ידוע רק גיל", show:["age"], desc:"סדרו את התור להנשמה לפי גיל בלבד." },
+    { key: 1, name: "שלב 2: נוסף נתון 'שנות חיים צפויות'", show:["age","years"], desc:"הסדר/י מחדש תוך התחשבות בשנות חיים צפויות לאחר טיפול." },
+    { key: 2, name: "שלב 3: נוסף נתון 'מקצוע'", show:["age","years","job"], desc:"הסדר/י מחדש גם לפי מקצוע." }
+  ],
+  patients: [
+    { id:"A", label:"מטופלת A", age:28, years:40, job:"סטודנטית לרפואה" },
+    { id:"B", label:"מטופל B", age:64, years:8,  job:"מורה בבית ספר יסודי" },
+    { id:"C", label:"מטופל C", age:47, years:20, job:"מהנדס תשתיות" },
+    { id:"D", label:"מטופל D", age:75, years:5,  job:"מנתח/ת" },
+    { id:"E", label:"מטופלת E", age:35, years:30, job:"הורה לשלושה, ללא תעסוקה" },
+    { id:"F", label:"מטופל F", age:59, years:10, job:"כבאי" }
+  ]
+};
+
+/* ===================== עזר ===================== */
+const $ = s => document.querySelector(s);
+const appEl = $("#app");
+const params = new URLSearchParams(location.search);
+const isHost = params.has("host");
+
+function randCode(n=4){
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let s=""; for(let i=0;i<n;i++) s+=alphabet[Math.floor(Math.random()*alphabet.length)];
+  return s;
+}
+async function roomExists(code){
+  const snap = await get(child(ref(db), `rooms/${code}`));
+  return snap.exists();
+}
+function qrURL(url){
+  return `https://chart.googleapis.com/chart?cht=qr&chs=280x280&chl=${encodeURIComponent(url)}`;
+}
+function escapeHtml(s=""){return s.replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]))}
+function escapeAttr(s=""){return s.replace(/"/g,'&quot;')}
+
+/* ===================== יצירת חדר ===================== */
+async function createRoom(){
+  let code = randCode();
+  while(await roomExists(code)) code = randCode();
+  await set(ref(db,`rooms/${code}`),{
+    createdAt: Date.now(),
+    roundIndex: -1,   // טרם התחיל
+    lock: true,       // קבלת תשובות נעולה עד פתיחה
+    scenario: SCENARIO,
+    players: {}
+  });
+  return code;
+}
+
+/* ===================== מסך מנחה ===================== */
+function hostUI(code){
+  const roomRef = ref(db,`rooms/${code}`);
+  onValue(roomRef, snap => renderHost(code, snap.val()||{}));
+}
+
+function renderHost(code, data){
+  const base   = location.origin + location.pathname;
+  const joinURL = `${base}?code=${encodeURIComponent(code)}`; // ה-QR כולל קוד חדר
+  const totalPlayers = data.players? Object.keys(data.players).length : 0;
+  const roundIndex   = data.roundIndex ?? -1;
+  const round        = data.scenario?.rounds?.[roundIndex] || null;
+  const patients     = data.scenario?.patients || [];
+  const subs         = collectSubmissions(data.players, roundIndex);
+
+  appEl.innerHTML = `
+    <div class=card>
+      <div class=row style="justify-content:space-between;align-items:flex-start;">
+        <div>
+          <h2>חדר <span class=mono>${code}</span></h2>
+          <div class=row>
+            <span class=pill><strong>${totalPlayers}</strong> משתתפים</span>
+            <span class=pill>שלב: <strong>${roundIndex<0?"טרם התחיל":`${roundIndex+1}/3`}</strong></span>
+            <span class=pill>קבלת תשובות: <strong>${data.lock?"סגור":"פתוח"}</strong></span>
+          </div>
+          ${round?`<p class=muted style="max-width:560px;margin-top:8px;">${escapeHtml(round.desc)}</p>`:""}
+          <div class=row style="margin-top:8px;gap:8px;">
+            <button class=primary onclick="startHost('${code}')" ${roundIndex!==-1?"disabled":''}>התחל שלב 1</button>
+            <button onclick="prevStage('${code}')" ${roundIndex<=0?"disabled":''}>⟵ שלב קודם</button>
+            <button onclick="nextStage('${code}')" ${roundIndex>=2?"disabled":''}>שלב הבא ⟶</button>
+            <button onclick="toggleLock('${code}')">${data.lock?"פתח קבלת תשובות":"סגור קבלת תשובות"}</button>
+            <button onclick="resetOrders('${code}')">אפס תשובות שלב</button>
+          </div>
+        </div>
+        <div class=qr>
+          <img alt="QR" src="${qrURL(joinURL)}"/>
+          <div class=muted style="margin-top:6px;">קישור לקהל: <span class=mono>${joinURL}</span></div>
+          <button style="margin-top:6px;" onclick="navigator.clipboard.writeText('${joinURL}')">העתקת קישור</button>
+        </div>
+      </div>
+    </div>
+
+    <div class=card>
+      <h2>תיאור המקרה</h2>
+      <div class=answers>
+        ${patients.map(p=>renderPatientCard(p, data.roundIndex)).join('')}
+      </div>
+      <p class=muted>המידע שנחשף לפי שלבים: 1) גיל; 2) גיל+שנות חיים צפויות; 3) גיל+שנות חיים צפויות+מקצוע.</p>
+    </div>
+
+    ${ roundIndex>=0 ? `
+    <div class=card>
+      <h2>תוצאות שלב ${roundIndex+1}</h2>
+      ${renderConsensus(patients, subs)}
+      ${renderHeatmap(patients, subs)}
+      ${renderChangesBlock(data.players, roundIndex)}
+    </div>` : `
+    <div class=card><h2>המשחק טרם התחיל</h2><p class=muted>לחצו "התחל שלב 1", לאחר מכן פתחו קבלת תשובות.</p></div>
+    `}
+  `;
+}
+
+function renderPatientCard(p, roundIndex){
+  const showAge = roundIndex>=0;
+  const showYears = roundIndex>=1;
+  const showJob = roundIndex>=2;
+  return `
+  <div class="card-patient">
+    <div class="drag-handle">${p.id}</div>
+    <div class="meta">
+      <div><strong>${escapeHtml(p.label)}</strong></div>
+      <div class="muted">${showAge?`גיל: <b>${p.age}</b>`:"גיל: —"} · ${showYears?`שנות חיים צפויות: <b>${p.years}</b>`:"שנות חיים: —"} · ${showJob?`מקצוע: <b>${escapeHtml(p.job)}</b>`:"מקצוע: —"}</div>
+    </div>
+  </div>`;
+}
+
+function collectSubmissions(players, roundIndex){
+  const orders = [];
+  for (const pid in players||{}){
+    const o = players[pid]?.orders?.[roundIndex];
+    if (Array.isArray(o) && o.length>0) orders.push(o);
+  }
+  return orders; // מערכים של מזהי מטופלים בסדר 1..6
+}
+
+function renderConsensus(patients, orders){
+  const ids = patients.map(p=>p.id);
+  const posSum = Object.fromEntries(ids.map(id=>[id,0]));
+  const count = orders.length;
+  for (const o of orders){ o.forEach((id, idx)=>{ if (posSum[id]!=null) posSum[id]+= (idx+1); }); }
+  const avg = Object.fromEntries(ids.map(id=>[id, count? (posSum[id]/count) : 0]));
+  const sorted = [...patients].sort((a,b)=> avg[a.id]-avg[b.id]);
+  const list = sorted.map((p,i)=>`<div class=pill><b>${i+1}.</b> ${escapeHtml(p.label)} <span class=muted>(עמדה ממוצעת ${avg[p.id]?avg[p.id].toFixed(2):"—"})</span></div>`).join(" ");
+  return `<h3>תור קונסנסואלי</h3><div class=row>${list || '<span class=muted>אין עדיין תשובות</span>'}</div>`
+}
+
+function renderHeatmap(patients, orders){
+  const n = patients.length;
+  const counts = Object.fromEntries(patients.map(p=>[p.id, Array(n).fill(0)]));
+  for (const o of orders){ o.forEach((id, idx)=>{ if (counts[id]) counts[id][idx]++; }); }
+  const total = orders.length || 1;
+  let html = `<h3 style=\"margin-top:14px;\">התפלגות מיקומים</h3><table class=heat><thead><tr><th>מטופל/ת</th>${Array.from({length:n},(_,i)=>`<th>${i+1}</th>`).join('')}</tr></thead><tbody>`;
+  for (const p of patients){
+    html += `<tr><td><b>${escapeHtml(p.label)}</b></td>`;
+    const arr = counts[p.id];
+    for (let i=0;i<n;i++){
+      const c = arr[i]||0; const w = Math.round(100*c/total);
+      html += `<td><div class=bar><i style=\"width:${w}%\"></i></div> <span class=muted>${c}</span></td>`
+    }
+    html += `</tr>`;
+  }
+  html += `</tbody></table>`;
+  return html;
+}
+
+function renderChangesBlock(players, roundIndex){
+  if (roundIndex<=0) return `<p class=muted style="margin-top:8px;">נתוני שינוי יוצגו החל משלב 2.</p>`;
+  // Spearman footrule בין השלב הנוכחי לקודם לכל משתתף
+  let have=0, sum=0, buckets={"0":0,"1-2":0,"3+":0};
+  for (const pid in players||{}){
+    const prev = players[pid]?.orders?.[roundIndex-1];
+    const cur  = players[pid]?.orders?.[roundIndex];
+    if (Array.isArray(prev) && Array.isArray(cur)){
+      const dist = footrule(prev, cur);
+      have++; sum += dist;
+      if (dist===0) buckets["0"]++; else if (dist<=2) buckets["1-2"]++; else buckets["3+"]++;
+    }
+  }
+  if (!have) return `<p class=muted style="margin-top:8px;">אין עדיין מספיק נתונים להשוואה.</p>`;
+  const avg = (sum/have).toFixed(2);
+  return `
+    <div style="margin-top:14px">
+      <h3>שינויים בין שלבים</h3>
+      <div class=legend>
+        <span class=tag>משתתפים עם נתונים: <b>${have}</b></span>
+        <span class=tag>מדד שינוי ממוצע (Spearman footrule): <b>${avg}</b></span>
+        <span class=tag>ללא שינוי: <b>${buckets["0"]}</b></span>
+        <span class=tag>1–2 החלפות: <b>${buckets["1-2"]}</b></span>
+        <span class=tag>3+ החלפות: <b>${buckets["3+"]}</b></span>
+      </div>
+    </div>`;
+}
+
+function footrule(a,b){ // sum |posA(id)-posB(id)|
+  const idxA = Object.fromEntries(a.map((id,i)=>[id,i]));
+  let s=0; for (let i=0;i<b.length;i++){ const id=b[i]; if (idxA[id]!=null) s += Math.abs(idxA[id]-i); }
+  return s;
+}
+
+/* ===================== מסך משתתף ===================== */
+let playerId   = localStorage.getItem("triage_player_id") || null;
+let playerName = localStorage.getItem("triage_player_name") || "";
+
+function playerUI(code){
+  const roomRef = ref(db,`rooms/${code}`);
+  onValue(roomRef, snap => renderPlayer(code, snap.val()||{}));
+}
+
+function renderPlayer(code, data){
+  if (!playerId) { playerId = crypto.randomUUID(); localStorage.setItem("triage_player_id", playerId); }
+  const joined     = !!(data.players && data.players[playerId]);
+  const me         = data.players?.[playerId] || {};
+  const roundIndex = data.roundIndex ?? -1;
+  const round      = data.scenario?.rounds?.[roundIndex] || null;
+  const patients   = data.scenario?.patients || [];
+  const lock       = !!data.lock;
+
+  // סדר נוכחי: מהתשובה בשלב, או מהשלב הקודם, או לפי מזהים
+  const curOrder = me.orders?.[roundIndex]
+    || me.orders?.[roundIndex-1]
+    || patients.map(p=>p.id);
+
+  appEl.innerHTML = `
+    <div class=card>
+      <h2>חדר <span class=mono>${code}</span></h2>
+      ${!joined ? `
+        <div class=row>
+          <input id=nm placeholder="שם" value="${escapeAttr(playerName)}" />
+          <button class=primary onclick="join('${code}')">כניסה</button>
+        </div>
+      ` : `
+        <div class=row>
+          <span class=pill>את/ה: <b>${escapeHtml(me.name||"אורח/ת")}</b></span>
+          <button onclick="leave('${code}')">יציאה</button>
+        </div>
+      `}
+    </div>
+
+    ${ roundIndex<0 ? `
+      <div class=card><h2>ממתינים לתחילת המשחק…</h2></div>
+    ` : !joined ? `` : `
+      <div class=card>
+        <h2>${escapeHtml(round.name)}</h2>
+        <p class=muted>${escapeHtml(round.desc)}</p>
+        <div class=row style="margin:8px 0">
+          <button onclick="randomize('${code}')" ${lock?"disabled":''}>🎲 סדר אקראי</button>
+          <button class=primary onclick="submitOrder('${code}')" ${lock?"disabled":''}>שלח/י</button>
+          <span class=muted>קבלת תשובות: <b>${lock?"סגור":"פתוח"}</b></span>
+        </div>
+        <div class=swap-hint>אפשר לגרור בעכבר או להקיש על שני קלפים כדי להחליף ביניהם. יש גם חיצים ↑/↓ להזזה מדויקת.</div>
+        <div id=queue class=queue data-lock="${lock}"></div>
+      </div>
+    `}
+  `;
+
+  if (roundIndex>=0 && joined){ buildQueueUI('#queue', patients, curOrder, roundIndex, lock); }
+}
+
+function buildQueueUI(sel, patients, order, roundIndex, lock){
+  const el = $(sel); el.innerHTML = '';
+  const byId = Object.fromEntries(patients.map(p=>[p.id,p]));
+  const ids = order && order.length===patients.length ? order.slice() : patients.map(p=>p.id);
+  let tapFirst = null; // לטאץ'
+
+  ids.forEach((id, idx)=>{
+    const p = byId[id];
+    const row = document.createElement('div');
+    row.className = 'card-patient';
+    row.draggable = !lock; // גרירה בשולחן עבודה
+    row.dataset.id = id;
+
+    row.innerHTML = `
+      <div class=drag-handle>≡</div>
+      <div class=rank mono>${idx+1}</div>
+      <div class=meta>
+        <div><b>${escapeHtml(p.label)}</b></div>
+        <div class=muted>${roundIndex>=0?`גיל: <b>${p.age}</b>`:"גיל: —"} · ${roundIndex>=1?`שנות חיים צפויות: <b>${p.years}</b>`:"שנות חיים: —"} · ${roundIndex>=2?`מקצוע: <b>${escapeHtml(p.job)}</b>`:"מקצוע: —"}</div>
+      </div>
+      <div class=ud-buttons>
+        <button ${lock?"disabled":''} title="למעלה" data-up>↑</button>
+        <button ${lock?"disabled":''} title="למטה" data-down>↓</button>
+      </div>`;
+
+    row.querySelector('[data-up]')?.addEventListener('click',()=>{ if(lock) return; move(id,-1); });
+    row.querySelector('[data-down]')?.addEventListener('click',()=>{ if(lock) return; move(id,1); });
+
+    // tap-to-swap
+    row.addEventListener('click',(e)=>{
+      if (lock) return; if (e.target.closest('button')) return;
+      if (!tapFirst){ tapFirst=row; row.style.outline = `2px solid ${getComputedStyle(document.documentElement).getPropertyValue('--acc')}`; }
+      else if (tapFirst===row){ tapFirst.style.outline='none'; tapFirst=null; }
+      else { const idA=tapFirst.dataset.id, idB=row.dataset.id; tapFirst.style.outline='none'; tapFirst=null; swap(idA,idB); }
+    });
+
+    // Drag & drop
+    row.addEventListener('dragstart',()=>{ if(lock) return; row.classList.add('dragging'); });
+    row.addEventListener('dragend',()=>{ row.classList.remove('dragging'); refreshRanks(); });
+
+    el.appendChild(row);
+  });
+
+  el.addEventListener('dragover', (e)=>{
+    e.preventDefault(); if (lock) return;
+    const dragging = el.querySelector('.dragging'); if (!dragging) return;
+    const after = getDragAfterElement(el, e.clientY);
+    if (after==null) el.appendChild(dragging); else el.insertBefore(dragging, after);
+  });
+
+  function getDragAfterElement(container, y){
+    const els = [...container.querySelectorAll('.card-patient:not(.dragging)')];
+    return els.reduce((closest, child)=>{
+      const box = child.getBoundingClientRect();
+      const offset = y - box.top - box.height/2;
+      if (offset<0 && offset>closest.offset) return {offset, element: child};
+      else return closest;
+    }, {offset: Number.NEGATIVE_INFINITY}).element;
+  }
+
+  function currentOrder(){ return [...el.querySelectorAll('.card-patient')].map(n=>n.dataset.id); }
+  function refreshRanks(){ [...el.querySelectorAll('.card-patient .rank')].forEach((r,i)=> r.textContent = i+1); }
+  function swap(idA,idB){
+    const a = el.querySelector(`[data-id="${idA}"]`);
+    const b = el.querySelector(`[data-id="${idB}"]`);
+    if (!a||!b) return;
+    const na = a.nextSibling; el.insertBefore(a, b); el.insertBefore(b, na); refreshRanks(); saveLocal(codeKey(), currentOrder());
+  }
+  function move(id, dir){
+    const nodes = [...el.querySelectorAll('.card-patient')];
+    const idx = nodes.findIndex(n=>n.dataset.id===id);
+    const target = idx+dir; if (target<0||target>=nodes.length) return;
+    const node = nodes[idx]; if (dir<0) el.insertBefore(node, nodes[target]); else el.insertBefore(nodes[target].nextSibling, node);
+    refreshRanks(); saveLocal(codeKey(), currentOrder());
+  }
+
+  // save initial
+  saveLocal(codeKey(), currentOrder());
+}
+
+function codeKey(){
+  const q = new URLSearchParams(location.search);
+  const code = q.get('code') || 'host';
+  return `triage_order_${code}`;
+}
+function saveLocal(key, order){ try{ localStorage.setItem(key, JSON.stringify(order)); }catch(e){} }
+function loadLocal(key){ try{ return JSON.parse(localStorage.getItem(key)||'null'); }catch(e){return null} }
+
+/* ===================== פעולות (מנחה/משתתף) ===================== */
+window.startHost = async (code)=>{
+  const rr = ref(db,`rooms/${code}`);
+  const d = (await get(rr)).val(); if (!d || d.roundIndex!==-1) return;
+  await update(rr, { roundIndex: 0, lock: false });
+};
+
+window.nextStage = async (code)=>{
+  const rr = ref(db,`rooms/${code}`);
+  const d = (await get(rr)).val(); if (!d) return;
+  if ((d.roundIndex??-1) >= 2) return;
+  await update(rr, { roundIndex: d.roundIndex+1, lock: false });
+};
+
+window.prevStage = async (code)=>{
+  const rr = ref(db,`rooms/${code}`);
+  const d = (await get(rr)).val(); if (!d) return;
+  if ((d.roundIndex??0) <= 0) return;
+  await update(rr, { roundIndex: d.roundIndex-1, lock: false });
+};
+
+window.toggleLock = async (code)=>{
+  const rr = ref(db,`rooms/${code}`);
+  const d = (await get(rr)).val(); if (!d) return;
+  await update(rr, { lock: !d.lock });
+};
+
+window.resetOrders = async (code)=>{
+  const rr = ref(db,`rooms/${code}`);
+  const d = (await get(rr)).val(); if (!d) return;
+  const ri = d.roundIndex; if (ri<0) return;
+  const updates = {};
+  for (const pid in d.players||{}) updates[`players/${pid}/orders/${ri}`] = null;
+  await update(rr, updates);
+};
+
+window.join = async (code)=>{
+  const name = ($("#nm")?.value || "").trim() || "אורח/ת";
+  playerName = name; localStorage.setItem("triage_player_name", name);
+  const meRef = ref(db,`rooms/${code}/players/${playerId}`);
+  await update(meRef, { name });
+};
+
+window.leave = async (code)=>{
+  const meRef = ref(db,`rooms/${code}/players/${playerId}`);
+  await set(meRef, null);
+};
+
+window.randomize = async (code)=>{
+  const key = codeKey();
+  const arr = (loadLocal(key) || []).slice();
+  for (let i=arr.length-1;i>0;i--){ const j = Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]]; }
+  localStorage.setItem(key, JSON.stringify(arr));
+  const el = document.querySelector('#queue'); if (!el) return;
+  const map = Object.fromEntries([...el.children].map(n=>[n.dataset.id, n]));
+  arr.forEach(id=>{ const node = map[id]; if (node) el.appendChild(node); });
+  [...el.querySelectorAll('.card-patient .rank')].forEach((r,i)=> r.textContent = i+1);
+};
+
+window.submitOrder = async (code)=>{
+  const el = document.querySelector('#queue'); if (!el) return;
+  const order = [...el.querySelectorAll('.card-patient')].map(n=>n.dataset.id);
+  const rr = ref(db,`rooms/${code}`);
+  const d  = (await get(rr)).val(); if (!d) return;
+  if (d.lock) { alert('קבלת תשובות סגורה'); return; }
+  const ri = d.roundIndex; if (ri<0) return;
+  const meRef = ref(db,`rooms/${code}/players/${playerId}`);
+  const me = (await get(meRef)).val() || {};
+  const orders = me.orders || {};
+  orders[ri] = order;
+  await update(meRef, { orders });
+  alert('נשלח! ניתן לעדכן ולשלוח שוב עד לסגירה.');
+};
+
+/* ===================== כניסה ראשית ===================== */
+(async function main(){
+  if (isHost) {
+    const code = await createRoom();
+    hostUI(code);
+  } else {
+    let code = new URLSearchParams(location.search).get('code');
+    if (!code) {
+      appEl.innerHTML = `
+        <div class=card>
+          <h2>כניסה לחדר</h2>
+          <div class=row>
+            <input id=code maxlength=6 placeholder="קוד חדר (למשל: ABCD)" />
+            <button class=primary onclick="go()">כניסה</button>
+          </div>
+          <p class=muted>בקש/י מהמנחה את הקוד שמופיע על המסך.</p>
+        </div>`;
+      window.go = async ()=>{
+        const v = (document.querySelector('#code').value||'').trim().toUpperCase();
+        if (!v) return; const exists = await roomExists(v);
+        if (!exists) { alert('חדר לא נמצא'); return; }
+        location.search = '?code='+encodeURIComponent(v);
+      };
+      return;
+    }
+    code = code.toUpperCase();
+    const exists = await roomExists(code);
+    if (!exists) { appEl.innerHTML = `<div class=card><h2>החדר ${code} לא קיים</h2></div>`; return; }
+    playerUI(code);
+  }
+})();
+</script>
+</body>
+</html>
