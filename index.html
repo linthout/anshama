@@ -35,7 +35,7 @@
     /* טבלאות ניתוח במסך המנחה */
     .heat{width:100%; border-collapse:collapse; font-size:14px}
     .heat th,.heat td{border-bottom:1px solid var(--border);padding:8px 10px;text-align:right}
-    .bar{height:14px; background:#e5edff; border:1px solid #dbeafe; border-radius:999px; position:relative}
+    .bar{height:16px; background:#e5edff; border:1px solid #dbeafe; border-radius:999px; position:relative}
     .bar > i{display:block; height:100%; background:var(--acc); border-radius:999px}
     .legend{display:flex;gap:8px;flex-wrap:wrap}
     .legend .tag{font-size:12px;padding:4px 10px;background:#eef2ff;border:1px solid #dbeafe;border-radius:999px}
@@ -43,22 +43,14 @@
     .qr{background:#ffffff;border:1px dashed var(--border);border-radius:12px;padding:10px}
     .answers{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
 
-    /* סטאטים גדולים */
+    /* סטאטים גדולים בעמודת שינוי בין שלבים */
     .stats-col{display:flex;flex-direction:column;gap:10px;margin-top:8px}
     .stat{background:#ffffff;border:1px solid var(--border);border-radius:12px;padding:12px}
     .stat h4{margin:0 0 4px 0;font-size:18px}
     .stat p{margin:0;color:var(--muted)}
-    .mini{font-size:12px;color:var(--muted)}
 
     /* קונסנסוס בעמודה */
     .consensus{display:flex;flex-direction:column;gap:8px;margin-top:6px}
-
-    /* סיכום המשחק */
-    .summary{display:grid;gap:14px}
-    .table{width:100%;border-collapse:collapse;font-size:14px}
-    .table th,.table td{border-bottom:1px solid var(--border);padding:8px 10px;text-align:right}
-    .chip{display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--border);border-radius:12px;background:#fff}
-    .chip b{min-width:4ch;text-align:center}
   </style>
 </head>
 <body>
@@ -142,39 +134,24 @@ async function roomExists(code){
   return snap.exists();
 }
 function qrURL(url){
+  // שימוש ב-qrserver.com
   return `https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(url)}`;
 }
 function escapeHtml(s=""){return s.replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]))}
 function escapeAttr(s=""){return s.replace(/"/g,'&quot;')}
 
-/* ===================== חישובים ===================== */
-function footrule(a,b){ // sum |posA(id)-posB(id)|
-  const idxA = Object.fromEntries(a.map((id,i)=>[id,i]));
-  let s=0; for (let i=0;i<b.length;i++){ const id=b[i]; if (idxA[id]!=null) s += Math.abs(idxA[id]-i); }
-  return s;
-}
-function fmax(n){ return Math.floor(n*n/2); }
-function bar(percent){ return `<div class=bar><i style="width:${Math.max(0,Math.min(100,percent))}%"></i></div>`; }
-
-function collectSubmissions(players, roundIndex){
-  const orders = [];
-  for (const pid in players||{}){
-    const o = players[pid]?.orders?.[roundIndex];
-    if (Array.isArray(o) && o.length>0) orders.push(o);
-  }
-  return orders; // מערכים של מזהי מטופלים בסדר 1..5
-}
-function collectStage(players, r){ return collectSubmissions(players, r); }
-function avgPositions(patients, orders){
-  if (!orders || !orders.length) return null;
-  const n = patients.length; const ids = patients.map(p=>p.id);
-  const sum = Object.fromEntries(ids.map(id=>[id,0]));
-  for (const o of orders){ o.forEach((id, i)=>{ if (sum[id]!=null) sum[id]+= (i+1); }); }
-  const avg = {}; for (const id of ids){ avg[id] = sum[id]/orders.length; }
-  return avg;
-}
-function consensusOrderFromAvg(patients, avg){
-  if (!avg) return null; return [...patients].sort((a,b)=>avg[a.id]-avg[b.id]).map(p=>p.id);
+/* ===================== יצירת חדר ===================== */
+async function createRoom(){
+  let code = randCode();
+  while(await roomExists(code)) code = randCode();
+  await set(ref(db,`rooms/${code}`),{
+    createdAt: Date.now(),
+    roundIndex: -1,   // טרם התחיל
+    lock: true,       // קבלת תשובות נעולה עד פתיחה
+    scenario: SCENARIO,
+    players: {}
+  });
+  return code;
 }
 
 /* ===================== מסך מנחה ===================== */
@@ -241,12 +218,10 @@ function renderHost(code, data){
       </div>
       ${renderConsensus(patients, subs)}
       ${renderHeatmap(patients, subs)}
-      ${renderChangesBlock(data.players, roundIndex, patients)}
+      ${renderChangesBlock(data.players, roundIndex)}
     </div>` : `
     <div class=card><h2>המשחק טרם התחיל</h2><p class=muted>לחצו "התחל שלב 1", לאחר מכן פתחו קבלת תשובות.</p></div>
     `}
-
-    ${ roundIndex>=1 ? renderGameSummary(data.players, patients, roundIndex) : '' }
   `;
 }
 
@@ -268,6 +243,15 @@ function renderPatientCard(p, roundIndex){
       </div>
     </div>
   </div>`;
+}
+
+function collectSubmissions(players, roundIndex){
+  const orders = [];
+  for (const pid in players||{}){
+    const o = players[pid]?.orders?.[roundIndex];
+    if (Array.isArray(o) && o.length>0) orders.push(o);
+  }
+  return orders; // מערכים של מזהי מטופלים בסדר 1..5
 }
 
 function countRandomized(players, roundIndex){
@@ -308,7 +292,7 @@ function renderHeatmap(patients, orders){
   return html;
 }
 
-function renderChangesBlock(players, roundIndex, patients){
+function renderChangesBlock(players, roundIndex){
   if (roundIndex<=0) return `<p class=muted style="margin-top:8px;">נתוני שינוי יוצגו החל משלב 2.</p>`;
   // Spearman footrule בין השלב הנוכחי לקודם לכל משתתף
   let have=0, sum=0, buckets={"0":0,"1-2":0,"3+":0}, randAmong=0;
@@ -323,9 +307,7 @@ function renderChangesBlock(players, roundIndex, patients){
     }
   }
   if (!have) return `<p class=muted style="margin-top:8px;">אין עדיין מספיק נתונים להשוואה.</p>`;
-  const avg = (sum/have);
-  const n   = patients.length; const mx = fmax(n);
-  const pct = Math.round(100*avg/mx);
+  const avg = (sum/have).toFixed(2);
   const randPct = Math.round(100*randAmong/have);
   return `
     <div style="margin-top:14px">
@@ -333,10 +315,8 @@ function renderChangesBlock(players, roundIndex, patients){
       <div class="stats-col">
         <div class=stat>
           <h4>מדד שינוי ממוצע</h4>
-          <div style="font-size:22px;font-weight:700;">${avg.toFixed(2)}</div>
-          <div class=mini>${avg.toFixed(2)} / ${mx} (${pct}%)</div>
-          ${bar(pct)}
-          <p>Spearman footrule — סכום ההפרשים המוחלטים במיקום לכל מטופל/ת בין שני שלבים, ממוצע על פני המשתתפים. אינדיקטור מנרמל מול המקסימום האפשרי.</p>
+          <div style="font-size:22px;font-weight:700;">${avg}</div>
+          <p>Spearman footrule — סכום ההפרשים המוחלטים במיקום לכל מטופל/ת בין שני שלבים, ממוצע על פני המשתתפים.</p>
         </div>
         <div class=stat>
           <h4>ללא שינוי</h4>
@@ -362,51 +342,10 @@ function renderChangesBlock(players, roundIndex, patients){
     </div>`;
 }
 
-function renderGameSummary(players, patients, roundIndex){
-  // 1) Trajectories: avg position per patient per stage + deltas
-  const stages = [0,1,2,3];
-  const avgs = {};
-  for (const r of stages){ avgs[r] = avgPositions(patients, collectStage(players, r)); }
-
-  let traj = `<h3>מסלולי מטופלים (מיקום ממוצע בכל שלב)</h3><table class=table><thead><tr><th>מטופל/ת</th>${stages.map(i=>`<th>שלב ${i+1}</th>`).join('')}</tr></thead><tbody>`;
-  for (const p of patients){
-    traj += `<tr><td><b>${escapeHtml(p.label)}</b></td>`;
-    let prev = null;
-    for (const r of stages){
-      const a = avgs[r]?.[p.id];
-      if (a){
-        let delta = prev!=null ? (prev - a) : null; // ירידה = עלייה בעדיפות
-        let arrow = '';
-        if (delta!=null){
-          const sign = delta>0 ? '+' : (delta<0 ? '−' : '±');
-          const sym  = delta>0 ? '▲' : (delta<0 ? '▼' : '•');
-          arrow = ` <span class=mini>${sym} ${sign}${Math.abs(delta).toFixed(2)}</span>`;
-        }
-        traj += `<td>${a.toFixed(2)}${arrow}</td>`; prev = a;
-      } else {
-        traj += `<td class=muted>—</td>`;
-      }
-    }
-    traj += `</tr>`;
-  }
-  traj += `</tbody></table>`;
-
-  // 2) Agreement per stage: avg normalized footrule vs consensus
-  let agree = `<h3 style="margin-top:12px">מדד הסכמה לפי שלב</h3><div class=summary>`;
-  for (const r of stages){
-    const orders = collectStage(players, r);
-    if (!orders.length){ agree += `<div class=chip><b>שלב ${r+1}</b><span class=muted>אין נתונים</span></div>`; continue; }
-    const avgMap = avgs[r];
-    const cons = consensusOrderFromAvg(patients, avgMap);
-    if (!cons){ agree += `<div class=chip><b>שלב ${r+1}</b><span class=muted>אין נתונים</span></div>`; continue; }
-    const mx = fmax(patients.length);
-    let sum=0; for (const o of orders){ sum += footrule(cons, o); }
-    const avgF = sum/orders.length; const pct = Math.round(100*(1 - (avgF/mx)));
-    agree += `<div class=chip><b>שלב ${r+1}</b><div style="flex:1">${bar(pct)}</div><span class=mono>${pct}%</span></div>`;
-  }
-  agree += `</div>`;
-
-  return `<div class=card><h2>סיכום המשחק</h2>${traj}${agree}</div>`;
+function footrule(a,b){ // sum |posA(id)-posB(id)|
+  const idxA = Object.fromEntries(a.map((id,i)=>[id,i]));
+  let s=0; for (let i=0;i<b.length;i++){ const id=b[i]; if (idxA[id]!=null) s += Math.abs(idxA[id]-i); }
+  return s;
 }
 
 /* ===================== מסך משתתף ===================== */
