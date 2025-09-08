@@ -105,17 +105,16 @@ const SCENARIO = {
   title: "תור להנשמה",
   rounds: [
     { key: 0, name: "שלב 1: ידוע רק גיל", show:["age"], desc:"סדרו את התור להנשמה לפי גיל בלבד." },
-    { key: 1, name: "שלב 2: נוספה הסתברות להישרדות לאחר הטיפול (%)", show:["age","survival"], desc:"הסדר/י מחדש תוך התחשבות בהסתברות להישרדות אחרי טיפול." },
-    { key: 2, name: "שלב 3: נוספו שנות חיים צפויות", show:["age","survival","years"], desc:"הסדר/י מחדש גם לפי שנות החיים הצפויות לאחר הצלחת הטיפול." },
-    { key: 3, name: "שלב 4: נוסף מקצוע (אחד המטופלים הוא רופא/ה)", show:["age","survival","years","job"], desc:"הסדר/י מחדש עם מידע על המקצוע." },
-    { key: 4, name: "שלב 5: נוסף אורח חיים", show:["age","survival","years","job","lifestyle"], desc:"הסדר/י מחדש גם לפי אורח החיים." }
+    { key: 1, name: "שלב 2: נוספה הסתברות להישרדות (%)", show:["age","survival"], desc:"הסדר/י מחדש תוך התחשבות בהסתברות להישרדות אחרי טיפול." },
+    { key: 2, name: "שלב 3: נוסף מקצוע (אחד המטופלים הוא רופא/ה)", show:["age","survival","job"], desc:"הסדר/י מחדש עם מידע על המקצוע." },
+    { key: 3, name: "שלב 4: נוסף אורח חיים", show:["age","survival","job","lifestyle"], desc:"הסדר/י מחדש גם לפי אורח החיים." }
   ],
   patients: [
-    { id:"A", label:"מטופל A", age:19,  survival:84, years:60, job:"חייל", lifestyle:"אורח חיים פעיל" },
-    { id:"B", label:"מטופל B", age:79, survival:75, years:8,  job:"מאמן ריצה", lifestyle:"ספורטאי פעיל" },
-    { id:"C", label:"מטופלת C", age:83, survival:30, years:3,  job:"מדענית בעלת שם עולמי", lifestyle:"אורח חיים יושבני" },
-    { id:"D", label:"מטופל D", age:52, survival:68, years:17, job:"רופא", lifestyle:"מעשן כבד" },
-    { id:"E", label:"מטופלת E", age:34, survival:60, years:28, job:"מפתחת תוכנה", lifestyle:"מכורה להרואין" }
+    { id:"A", label:"מטופל A", age: 21, survival: 20,  job:"מובטל",           lifestyle:"מכורה להרואין" },
+    { id:"B", label:"מטופל B", age:75, survival:80,   job:"מאמן ריצה", lifestyle:"ספורטאי פעיל" },
+    { id:"C", label:"מטופלת C", age:80, survival:20, job:"מדענית בעלת שם עולמי", lifestyle:"אורח חיים יושבני" },
+    { id:"D", label:"מטופל D", age:52, survival:50, job:"רופא חדר מיון", lifestyle:"מעשן כבד" },
+    { id:"E", label:"מטופלת E", age:34, survival:90, job:"מפתחת תוכנה", lifestyle:"פעיל" }
   ]
 };
 
@@ -182,14 +181,14 @@ function renderHost(code, data){
           <h2>חדר <span class=mono>${code}</span></h2>
           <div class=row>
             <span class=pill><strong>${totalPlayers}</strong> משתתפים</span>
-            <span class=pill>שלב: <strong>${roundIndex<0?"טרם התחיל":`${roundIndex+1}/5`}</strong></span>
+            <span class=pill>שלב: <strong>${roundIndex<0?"טרם התחיל":`${roundIndex+1}/4`}</strong></span>
             <span class=pill>קבלת תשובות: <strong>${data.lock?"סגור":"פתוח"}</strong></span>
           </div>
           ${round?`<p class=muted style="max-width:680px;margin-top:8px;">${escapeHtml(round.desc)}</p>`:""}
           <div class=row style="margin-top:8px;gap:8px;">
             <button class=primary onclick="startHost('${code}')" ${roundIndex!==-1?"disabled":''}>התחל שלב 1</button>
             <button onclick="prevStage('${code}')" ${roundIndex<=0?"disabled":''}>⟵ שלב קודם</button>
-            <button onclick="nextStage('${code}')" ${roundIndex>=4?"disabled":''}>שלב הבא ⟶</button>
+            <button onclick="nextStage('${code}')" ${roundIndex>=3?"disabled":''}>שלב הבא ⟶</button>
             <button onclick="toggleLock('${code}')">${data.lock?"פתח קבלת תשובות":"סגור קבלת תשובות"}</button>
             <button onclick="resetOrders('${code}')">אפס תשובות שלב</button>
           </div>
@@ -207,7 +206,7 @@ function renderHost(code, data){
       <div class=answers>
         ${patients.map(p=>renderPatientCard(p, data.roundIndex)).join('')}
       </div>
-      <p class=muted>המידע מצטבר בין השלבים: 1) גיל → 2) +הסתברות להישרדות → 3) +שנות חיים צפויות → 4) +מקצוע → 5) +אורח חיים.</p>
+      <p class=muted>המידע מצטבר בין השלבים: 1) גיל → 2) +הסתברות להישרדות → 3) +מקצוע → 4) +אורח חיים.</p>
     </div>
 
     ${ roundIndex>=0 ? `
@@ -229,9 +228,8 @@ function renderHost(code, data){
 function renderPatientCard(p, roundIndex){
   const showAge = roundIndex>=0;
   const showSurv = roundIndex>=1;
-  const showYears = roundIndex>=2;
-  const showJob = roundIndex>=3;
-  const showLife = roundIndex>=4;
+  const showJob = roundIndex>=2;
+  const showLife = roundIndex>=3;
   return `
   <div class="card-patient">
     <div class="drag-handle">${p.id}</div>
@@ -240,7 +238,6 @@ function renderPatientCard(p, roundIndex){
       <div class="muted">
         ${showAge?`גיל: <b>${p.age}</b>`:"גיל: —"}
         · ${showSurv?`הסתברות הישרדות: <b>${p.survival}%</b>`:"הסתברות: —"}
-        · ${showYears?`שנות חיים צפויות: <b>${p.years}</b>`:"שנות חיים: —"}
         · ${showJob?`מקצוע: <b>${escapeHtml(p.job)}</b>`:"מקצוע: —"}
         · ${showLife?`אורח חיים: <b>${escapeHtml(p.lifestyle)}</b>`:"אורח חיים: —"}
       </div>
@@ -431,9 +428,8 @@ function buildQueueUI(sel, patients, order, roundIndex, lock){
         <div class=muted>
           ${roundIndex>=0?`גיל: <b>${p.age}</b>`:"גיל: —"}
           · ${roundIndex>=1?`הסתברות הישרדות: <b>${p.survival}%</b>`:"הסתברות: —"}
-          · ${roundIndex>=2?`שנות חיים צפויות: <b>${p.years}</b>`:"שנות חיים: —"}
-          · ${roundIndex>=3?`מקצוע: <b>${escapeHtml(p.job)}</b>`:"מקצוע: —"}
-          · ${roundIndex>=4?`אורח חיים: <b>${escapeHtml(p.lifestyle)}</b>`:"אורח חיים: —"}
+          · ${roundIndex>=2?`מקצוע: <b>${escapeHtml(p.job)}</b>`:"מקצוע: —"}
+          · ${roundIndex>=3?`אורח חיים: <b>${escapeHtml(p.lifestyle)}</b>`:"אורח חיים: —"}
         </div>
       </div>
       <div class=ud-buttons>
@@ -514,7 +510,7 @@ window.startHost = async (code)=>{
 window.nextStage = async (code)=>{
   const rr = ref(db,`rooms/${code}`);
   const d = (await get(rr)).val(); if (!d) return;
-  if ((d.roundIndex??-1) >= 4) return;
+  if ((d.roundIndex??-1) >= 3) return;
   await update(rr, { roundIndex: d.roundIndex+1, lock: false });
 };
 
